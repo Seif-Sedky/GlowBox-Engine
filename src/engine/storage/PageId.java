@@ -49,10 +49,25 @@ public final class PageId {
     
     /**
      * Byte offset of this page within the file.
-     * Used by DiskManager when seeking(searching) before a read or write.
+     * Used by DiskManager when seeking (search) before a read or write.
      */
     public long fileOffset() {
         return (long) pageNumber * Page.PAGE_SIZE;
     }
 
+    /**
+     * Generates a numeric bucket ID (hash code) based on the tableId and pageNumber.
+     * * WHY THIS IS CRITICAL:
+     * We use PageId as the key in the Buffer Pool's HashMap cache. 
+     * If we don't override hashCode(), Java defaults to using the object's 
+     * memory address. This means new PageId(1, 5) and new PageId(1, 5) 
+     * would map to different buckets, breaking the cache completely and 
+     * causing endless disk reads.
+     */
+    
+    @Override
+    public int hashCode() {
+        return Objects.hash(tableId, pageNumber);
+    }
+   
 }
