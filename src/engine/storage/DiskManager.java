@@ -17,6 +17,8 @@ import java.util.Map;
  *You maintain the connection open using the map, only closed when shutdown
  *You are storing pages within a file, making pages as seperate files will result in too many open 
  *files which will make the OS crash your database
+ *In other systems, it could be multiple files, multiple directories and even multiple machines 
+ *
  *
  *Seek is not like buffered reader, you can take your needle and go to wherever you need in the file 
  *
