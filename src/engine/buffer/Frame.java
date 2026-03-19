@@ -8,6 +8,8 @@ import engine.storage.Page;
  * A Frame wraps a Page that is currently loaded in memory and tracks
  * whether anything is actively using it (pinCount) so the replacer
  * knows it cannot be evicted while in use.
+ * 
+ * Simplistic assumption: Dirty flag
  */
 public class Frame {
 
