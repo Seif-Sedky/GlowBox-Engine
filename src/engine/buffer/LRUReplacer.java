@@ -56,13 +56,6 @@ public class LRUReplacer {
         lruMap.put(frameIndex, Boolean.TRUE);
     }
 
-    /**
-     * Records that a frame was just accessed (moves it to MRU end).
-     * Call this on every buffer hit.
-     */
-    public void recordAccess(int frameIndex) {
-        lruMap.get(frameIndex); // access-order map moves this to the tail
-    }
 
     /**
      * Removes a frame from eviction candidates entirely.
