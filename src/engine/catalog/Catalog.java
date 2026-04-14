@@ -34,7 +34,7 @@ public class Catalog {
         return schema;
     }
 
-    public void dropTable(String tableName) {
+    public void dropTable(String tableName) {//Caller responsible for removing it from disk 
         TableSchema schema = getTable(tableName);
 
         List<IndexMetadata> tableIndexes = indexesByTable
