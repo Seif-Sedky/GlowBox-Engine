@@ -166,6 +166,27 @@ public class LinearHashIndex implements Index {
         return column.getName();
     }
 
+    /**
+     * Returns every RecordId stored in the index, in bucket order.
+     * Used by IndexScanOperator to enumerate all indexed records
+     * without knowing specific key values.
+     */
+    public List<RecordId> getAllRids() throws IOException {
+        List<RecordId> all = new ArrayList<>();
+        for (int b = 0; b <= M; b++) {
+            int pageNum = bucketPageNums[b];
+            while (pageNum != -1) {
+                Page page  = readBucketPage(pageNum);
+                int  count = BucketPageLayout.getEntryCount(page);
+                for (int idx = 0; idx < count; idx++) {
+                    all.add(BucketPageLayout.getRecordId(page, idx, keySize));
+                }
+                pageNum = BucketPageLayout.getOverflowPageNum(page);
+            }
+        }
+        return all;
+    }
+
     // -------------------------------------------------------------------------
     // Core algorithm — split
     // -------------------------------------------------------------------------
@@ -308,8 +329,8 @@ public class LinearHashIndex implements Index {
                 rids.add(BucketPageLayout.getRecordId(page, idx, keySize));
             }
 
-            pageNum = BucketPageLayout.getOverflowPageNum(page); //you keep traversing the chain till an overflow page with 
-            //overflow ==-1
+            pageNum = BucketPageLayout.getOverflowPageNum(page);//you keep traversing the chain till an overflow page with 
+            //overflow == -1
         }
     }
 
@@ -358,7 +379,7 @@ public class LinearHashIndex implements Index {
     private int hash(Field key) {
         return switch (key.getType()) {
             case INT     -> key.getInt() & 0x7FFFFFFF;
-            case BOOLEAN -> key.getBoolean() ? 1 : 0; //NEVER LINEAR HASH ON A BOOLEAN COLUMN 
+            case BOOLEAN -> key.getBoolean() ? 1 : 0;
             case CHAR    -> key.getString().strip().hashCode() & 0x7FFFFFFF;
         };
     }
