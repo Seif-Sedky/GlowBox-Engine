@@ -21,9 +21,10 @@ import engine.storage.PageId;
  *
  * Unlike SlottedPageLayout, entries are always appended and never have
  * gaps — deletion shifts remaining entries left. This is fine because
- * bucket pages hold at most ~15 entries (for INT keys), so shifts are cheap.
+ * bucket pages hold at most ~15 entries (for INT keys), so shifts are cheap,
+ *  this also operated on a column level, not a table level like slottedPageLayout.
  */
-public final class LinearHashBucket {
+public final class BucketPageLayout {
 
     public static final int OFFSET_OVERFLOW    = 0;  // int:  4 bytes
     public static final int OFFSET_ENTRY_COUNT = 4;  // short: 2 bytes
@@ -32,7 +33,7 @@ public final class LinearHashBucket {
     /** Size of the RecordId portion of an entry (tableId + pageNum + slotNum). */
     public static final int RID_SIZE           = 12;
 
-    private LinearHashBucket() {}
+    private BucketPageLayout() {}
 
     // -------------------------------------------------------------------------
     // Init
