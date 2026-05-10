@@ -48,7 +48,7 @@ import java.util.List;
 public class BNLJoinOperator extends Operator {
 
     /** Simulated records per block (≈ one disk page). */
-    static final int BLOCK_SIZE = 32;
+    public static final int BLOCK_SIZE = 32;
 
     private final Operator       left;
     private final Operator       right;
