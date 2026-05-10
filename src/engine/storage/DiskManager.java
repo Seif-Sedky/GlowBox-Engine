@@ -8,186 +8,190 @@ import java.util.Map;
 /**
  * Reads and writes fixed-size pages to binary .db files on disk.
  *
- * One .db file exists per table (and per index). The DiskManager
- * owns the file handles and is the only class in the engine that
- * performs actual I/O. Every other layer talks to the BufferPool,
- * which calls down here only on a cache miss or a dirty eviction.
+ * Supports two kinds of files:
+ *   Table files  — identified by int tableId, stored as "table_<id>.db"
+ *   Named files  — identified by a String name, stored as "<name>.db"
+ *                  Used by index structures (e.g. "idx_employees_salary.db")
  *
- *
- *You maintain the connection open using the map, only closed when shutdown
- *You are storing pages within a file, making pages as seperate files will result in too many open 
- *files which will make the OS crash your database
- *In other systems, it could be multiple files, multiple directories and even multiple machines 
- *
- *
- *Seek is not like buffered reader, you can take your needle and go to wherever you need in the file 
- *
- *
- * Simplicity choices:
- *   - One RandomAccessFile per table, kept open for the lifetime of
- *     the session. No connection pooling or handle recycling needed
- *     for a single-user tool.
- *   - Page N lives at byte offset N * PAGE_SIZE. No header file,
- *     no extent map — the file length divided by PAGE_SIZE tells you
- *     how many pages exist.
- *   - No write-ahead log, no checksums. Crash recovery is out of scope.
+ * All I/O goes through RandomAccessFile with seek + read/write.
+ * One file handle per file, kept open for the session lifetime.
  */
 public class DiskManager {
 
-    /** Directory where all .db files are stored. */
     private final Path dataDirectory;
 
-    /**
-     * Open file handles, keyed by tableId.
-     * Opened lazily on first access, closed on shutdown().
-     */
-    private final Map<Integer, RandomAccessFile> openFiles = new HashMap<>();
+    /** Open file handles keyed by filename stem (without .db). */
+    private final Map<String, RandomAccessFile> openFiles = new HashMap<>();
 
     // -------------------------------------------------------------------------
     // Construction
     // -------------------------------------------------------------------------
 
-    /**
-     * @param dataDirectory path to the folder that holds all .db files.
-     *                      Created automatically if it does not exist.
-     */
     public DiskManager(Path dataDirectory) throws IOException {
         this.dataDirectory = dataDirectory;
         Files.createDirectories(dataDirectory);
     }
 
     // -------------------------------------------------------------------------
-    // Core I/O
+    // Table file API  (used by BufferPoolManager and HeapFile)
+    // -------------------------------------------------------------------------
+
+    public Page readPage(PageId pageId) throws IOException {
+        return readPageInternal(tableKey(pageId.getTableId()), pageId.getPageNumber(), pageId);
+    }
+
+    public void writePage(Page page) throws IOException {
+        writePageInternal(tableKey(page.getPageId().getTableId()), page);
+    }
+
+    public Page allocatePage(int tableId) throws IOException {
+        return allocatePageInternal(tableKey(tableId), tableId);
+    }
+
+    public int pageCount(int tableId) throws IOException {
+        return namedPageCount(tableKey(tableId));
+    }
+
+    public void createTableFile(int tableId) throws IOException {
+        createFileInternal(tableKey(tableId));
+    }
+
+    public void deleteTableFile(int tableId) throws IOException {
+        closeHandle(tableKey(tableId));
+        Files.deleteIfExists(filePath(tableKey(tableId)));
+    }
+
+    // -------------------------------------------------------------------------
+    // Named file API  (used directly by index structures)
     // -------------------------------------------------------------------------
 
     /**
-     * Reads one page from disk into a new Page object.
-     *
-     * @param pageId identifies which file and which offset to read from
-     * @return a Page loaded with the bytes from disk, dirty flag cleared
+     * Creates a new empty .db file with the given name stem.
+     * e.g. name="idx_employees_salary" → idx_employees_salary.db
      */
-    public Page readPage(PageId pageId) throws IOException {
-        RandomAccessFile file = getFile(pageId.getTableId());
-        long offset = pageId.fileOffset();
+    public void createNamedFile(String name) throws IOException {
+        createFileInternal(name);
+    }
 
-        if (offset + Page.PAGE_SIZE > file.length())
-            throw new IOException("Page " + pageId + " does not exist on disk.");
+    /** Reads one page from a named file by its page number. */
+    public Page readNamedPage(String name, int pageNumber) throws IOException {
+        PageId id = namedPageId(pageNumber);
+        return readPageInternal(name, pageNumber, id);
+    }
 
-        byte[] buffer = new byte[Page.PAGE_SIZE];
-        file.seek(offset);
-        file.readFully(buffer);
-
-        return new Page(pageId, buffer);
+    /** Writes a page back to a named file using the page's own page number. */
+    public void writeNamedPage(String name, Page page) throws IOException {
+        writePageInternal(name, page);
     }
 
     /**
-     * Writes a page's bytes to its corresponding position in the file.
-     * Clears the dirty flag on the page after a successful write.
-     *
-     * @param page the page to flush — its PageId determines the file and offset
+     * Appends a blank page to a named file and returns it.
+     * The returned page has a synthetic PageId(0, newPageNumber).
      */
-    public void writePage(Page page) throws IOException {
-        RandomAccessFile file = getFile(page.getPageId().getTableId());
-        file.seek(page.getPageId().fileOffset());
-        file.write(page.getData());
-        page.clearDirty();
-    }
-
-    /**
-     * Allocates a new blank page at the end of the file. (add a page)
-     *
-     * Extends the file by exactly PAGE_SIZE bytes (written as zeros),
-     * initialises a slotted-page header on it, and returns the new page
-     * ready for use.
-     *
-     * @param tableId the table whose file should be extended
-     * @return a freshly initialised Page with the next available page number
-     */
-    public Page allocatePage(int tableId) throws IOException {
-        RandomAccessFile file = getFile(tableId);
-
-        int newPageNumber = (int) (file.length() / Page.PAGE_SIZE);
-        PageId newId      = new PageId(tableId, newPageNumber);
-
-        // Extend the file with a zero-filled page
+    public Page allocateNamedPage(String name) throws IOException {
+        RandomAccessFile file = getHandle(name);
+        int newPageNumber = (int)(file.length() / Page.PAGE_SIZE);
         file.seek(file.length());
         file.write(new byte[Page.PAGE_SIZE]);
 
-        // Initialise the slotted-page header in memory and flush immediately
-        Page page = new Page(newId);
-        SlottedPageLayout.initPage(page);
-        writePage(page);
-
+        PageId id   = namedPageId(newPageNumber);
+        Page   page = new Page(id);
+        writePageInternal(name, page);
         return page;
     }
 
-    // -------------------------------------------------------------------------
-    // File-level operations
-    // -------------------------------------------------------------------------
-
- 
-    public int pageCount(int tableId) throws IOException {
-        Path filePath = filePathFor(tableId);
-        if (!Files.exists(filePath)) return 0;
-        return (int) (Files.size(filePath) / Page.PAGE_SIZE);
+    /** Returns the number of pages in a named file (0 if file does not exist). */
+    public int namedPageCount(String name) throws IOException {
+        Path p = filePath(name);
+        if (!Files.exists(p)) return 0;
+        return (int)(Files.size(p) / Page.PAGE_SIZE);
     }
 
-
-    public void createTableFile(int tableId) throws IOException {
-        Path filePath = filePathFor(tableId);
-        if (Files.exists(filePath))
-            throw new IOException("File already exists for tableId " + tableId + ": " + filePath);
-        Files.createFile(filePath);
-    }
-
-    /**
-     * Deletes the .db file for the given table and closes its handle.
-     * Used by DROP TABLE.
-     */
-    public void deleteTableFile(int tableId) throws IOException {
-        closeFile(tableId);
-        Files.deleteIfExists(filePathFor(tableId));
+    /** Deletes a named file and closes its handle. */
+    public void deleteNamedFile(String name) throws IOException {
+        closeHandle(name);
+        Files.deleteIfExists(filePath(name));
     }
 
     // -------------------------------------------------------------------------
     // Lifecycle
     // -------------------------------------------------------------------------
 
-    /**
-     * Closes all open file handles.
-     * Call this on application shutdown.
-     */
     public void shutdown() {
-        for (Map.Entry<Integer, RandomAccessFile> entry : openFiles.entrySet()) {
-            try { entry.getValue().close(); }
-            catch (IOException ignored) {}
+        for (RandomAccessFile raf : openFiles.values()) {
+            try { raf.close(); } catch (IOException ignored) {}
         }
         openFiles.clear();
     }
 
     // -------------------------------------------------------------------------
-    // Private helpers
+    // Private shared implementation
     // -------------------------------------------------------------------------
 
-    /** Returns the open file handle for a table, opening it lazily if needed. */
-    private RandomAccessFile getFile(int tableId) throws IOException {
-        if (!openFiles.containsKey(tableId)) { //check if in stored open connections
-            Path filePath = filePathFor(tableId);
-            if (!Files.exists(filePath))
-                throw new IOException("No .db file found for tableId " + tableId
-                    + ". Call createTableFile() first.");
-            openFiles.put(tableId, new RandomAccessFile(filePath.toFile(), "rw"));
-        }
-        return openFiles.get(tableId);
+    private Page readPageInternal(String key, int pageNumber, PageId id) throws IOException {
+        RandomAccessFile file   = getHandle(key);
+        long             offset = (long) pageNumber * Page.PAGE_SIZE;
+
+        if (offset + Page.PAGE_SIZE > file.length())
+            throw new IOException("Page " + pageNumber + " does not exist in file " + key + ".db");
+
+        byte[] buf = new byte[Page.PAGE_SIZE];
+        file.seek(offset);
+        file.readFully(buf);
+        return new Page(id, buf);
     }
 
-    private void closeFile(int tableId) throws IOException {
-        RandomAccessFile raf = openFiles.remove(tableId);
+    private void writePageInternal(String key, Page page) throws IOException {
+        RandomAccessFile file   = getHandle(key);
+        long             offset = (long) page.getPageId().getPageNumber() * Page.PAGE_SIZE;
+        file.seek(offset);
+        file.write(page.getData());
+        page.clearDirty();
+    }
+
+    private Page allocatePageInternal(String key, int tableId) throws IOException {
+        RandomAccessFile file         = getHandle(key);
+        int              newPageNum   = (int)(file.length() / Page.PAGE_SIZE);
+        PageId           id           = new PageId(tableId, newPageNum);
+
+        file.seek(file.length());
+        file.write(new byte[Page.PAGE_SIZE]);
+
+        Page page = new Page(id);
+        SlottedPageLayout.initPage(page);
+        writePageInternal(key, page);
+        return page;
+    }
+
+    private void createFileInternal(String key) throws IOException {
+        Path p = filePath(key);
+        if (Files.exists(p))
+            throw new IOException("File already exists: " + p);
+        Files.createFile(p);
+    }
+
+    private RandomAccessFile getHandle(String key) throws IOException {
+        if (!openFiles.containsKey(key)) {
+            Path p = filePath(key);
+            if (!Files.exists(p))
+                throw new IOException("No .db file for '" + key
+                    + "'. Call createTableFile() or createNamedFile() first.");
+            openFiles.put(key, new RandomAccessFile(p.toFile(), "rw"));
+        }
+        return openFiles.get(key);
+    }
+
+    private void closeHandle(String key) throws IOException {
+        RandomAccessFile raf = openFiles.remove(key);
         if (raf != null) raf.close();
     }
 
-    /** Table 3 lives at <dataDirectory>/table_3.db */
-    private Path filePathFor(int tableId) {
-        return dataDirectory.resolve("table_" + tableId + ".db");
-    }
+    private Path   filePath(String key)      { return dataDirectory.resolve(key + ".db"); }
+    private String tableKey(int tableId)     { return "table_" + tableId; }
+
+    /**
+     * Named file pages use tableId=0 as a placeholder since they bypass
+     * the BufferPool and are never cached by PageId in a frame map.
+     */
+    private PageId namedPageId(int pageNumber) { return new PageId(0, pageNumber); }
 }
