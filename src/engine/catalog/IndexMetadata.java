@@ -12,7 +12,7 @@ import java.util.List;
 public class IndexMetadata {
 
 	public enum IndexType {
-		BPLUS_TREE, EXTENDIBLE_HASH, RTREE, BITMAP
+		BPLUS_TREE, EXTENDIBLE_HASH, RTREE, BITMAP, LINEAR_HASH
 	}
 
 	private final String indexName;

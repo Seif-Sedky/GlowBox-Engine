@@ -1,7 +1,5 @@
 package engine.storage;
 
-package engine.storage;
-
 import java.util.Objects;
 
 /**

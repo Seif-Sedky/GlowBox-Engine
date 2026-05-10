@@ -15,6 +15,9 @@ package engine.catalog;
  *     things robust for demo data without needing dynamic resizing.
  *   - No persistence. Rebuilt from inserts at runtime.
  */
+
+//ADDS ALOT OF RAM OVERHEAD, MIGHT REMOVE
+
 public class Histogram {
 
     private final int   min;
