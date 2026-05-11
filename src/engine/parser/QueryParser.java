@@ -31,12 +31,12 @@ import java.util.*;
 /**
  * Translates a SQL string into a ParsedStatement using JSqlParser.
  *
- * Supported set operations (new):
+ * Supported set operations:
  *   SELECT * FROM t1 [WHERE ...] UNION     SELECT * FROM t2 [WHERE ...]
  *   SELECT * FROM t1 [WHERE ...] INTERSECT SELECT * FROM t2 [WHERE ...]
  *   SELECT * FROM t1 [WHERE ...] EXCEPT    SELECT * FROM t2 [WHERE ...]
  *
- * All other supported syntax is unchanged — see ParsedStatement for the
+ * see ParsedStatement for the
  * full list of supported statement types.
  */
 public class QueryParser {

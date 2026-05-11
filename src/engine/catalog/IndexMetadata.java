@@ -88,7 +88,7 @@ public class IndexMetadata {
 
 	@Override
 	public String toString() {
-		return "IndexMetadata{name=" + indexName + ", table=" + tableId + ", column=" + columnName + ", type="
+		return "IndexMetadata{name=" + indexName + ", table=" + tableId + ", column=" + getColumnName() + ", type="
 				+ indexType + ", root=" + rootPageNumber + "}";
 	}
 }
