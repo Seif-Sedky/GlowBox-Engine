@@ -75,15 +75,10 @@ public class QueryParser {
     // -------------------------------------------------------------------------
 
     private static ParsedStatement translateSelect(Select select) {
-        SelectBody body = select.getSelectBody();
-
-        // Set operation: UNION / INTERSECT / EXCEPT
-        if (body instanceof SetOperationList sol) {
-            return translateSetOperation(sol);
-        }
-
-        // Regular single SELECT
-        return translatePlainSelect((PlainSelect) body);
+        // JSqlParser 4.6+: SelectBody was removed. PlainSelect and SetOperationList
+        // both implement Select directly — check the Select object itself.
+        if (select instanceof SetOperationList sol) return translateSetOperation(sol);
+        return translatePlainSelect((PlainSelect) select);
     }
 
     /**
@@ -91,7 +86,7 @@ public class QueryParser {
      * Chained set operations (A UNION B UNION C) are not supported.
      */
     private static ParsedStatement translateSetOperation(SetOperationList sol) {
-        List<SelectBody>   selects = sol.getSelects();
+        List<Select>       selects = sol.getSelects();   // JSqlParser 4.6+: List<Select> not List<SelectBody>
         List<SetOperation> ops     = sol.getOperations();
 
         if (selects.size() != 2 || ops.size() != 1)
@@ -199,9 +194,11 @@ public class QueryParser {
 
     private static ParsedStatement translateInsert(Insert insert) {
         String tableName = insert.getTable().getName();
-        List<Expression> exprs = insert.getValues().getExpressions();
+        // JSqlParser 4.6+: insert.getValues() was removed.
+        // INSERT values now live in insert.getSelect() as a PlainSelect with no FROM.
+        var exprs = ((PlainSelect) insert.getSelect()).getValues().getExpressions();
         List<String> rawValues = new ArrayList<>();
-        for (Expression e : exprs) rawValues.add(extractRawValue(e));
+        for (var e : exprs) rawValues.add(extractRawValue(e));
         return new ParsedStatement.InsertStatement(tableName, rawValues);
     }
 
@@ -213,8 +210,8 @@ public class QueryParser {
         String tableName = update.getTable().getName();
         Map<String, String> assignments = new LinkedHashMap<>();
         for (UpdateSet us : update.getUpdateSets()) {
-            List<Column>     cols = us.getColumns();
-            List<Expression> vals = us.getValues();
+            List<Column> cols = us.getColumns();
+            var          vals = us.getValues();
             for (int i = 0; i < cols.size(); i++)
                 assignments.put(cols.get(i).getColumnName(), extractRawValue(vals.get(i)));
         }
