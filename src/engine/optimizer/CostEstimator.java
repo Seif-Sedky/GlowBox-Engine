@@ -12,6 +12,12 @@ import engine.execution.BNLJoinOperator;
  *
  * These are estimates, not exact measurements. The goal is to make the
  * right choice most of the time, not to predict runtime to the millisecond.
+ * 
+ * 
+ * The cost estimator is not the most useful in this project, since alot of the things 
+ * that are considered parameters in the cost are neglected/not implemented, and thus decreasing importance of cost estimator
+ * 
+ * 
  */
 public class CostEstimator {
 

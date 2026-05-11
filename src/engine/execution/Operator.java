@@ -7,7 +7,7 @@ import java.util.List;
 /**
  * Abstract base class for all physical execution operators in GlowBox Engine.
  *
- * <h2>Design choice — bulk materialisation (not volcano / iterator)</h2>
+ * <h2>Design choice — bulk materialisation </h2>
  *
  * Every operator collects its full output into a {@code List<Record>} when
  * {@link #execute()} is called, rather than yielding one row at a time through
@@ -15,13 +15,14 @@ import java.util.List;
  *
  * <p>A row-at-a-time iterator is standard in production systems because it
  * avoids materialising intermediate results and pipelines work between operators.
- * It was deliberately <em>not</em> chosen here for the following reasons:
+ * It was deliberately not chosen here for the following reasons:
  *
  * <ul>
  *   <li>Each operator would need to maintain open cursor state between successive
  *       {@code next()} calls — a scan position, a hash-table iterator, a merge
  *       pointer — significantly complicating every implementation.</li>
- *   <li>GlowBox's primary goal is <em>visualisation and pedagogy</em>.  Bulk
+ *   <li>GlowBox's primary goal is to illustrate my understanding of core algorithms, not building a production
+ *   grade system.  Bulk
  *       materialisation makes each operator a self-contained, stateless,
  *       easily inspectable unit: call {@code execute()}, get a list, inspect it.</li>
  *   <li>Operators compose trivially: one operator's {@code List<Record>} is
