@@ -20,16 +20,10 @@ GlowBox Engine is a single-user, educational, disk-based storage engine built fr
 | Index | Disk-backed Linear Hash index on a single column. |
 | Execution Operators | Bulk-materialization Volcano model with one operator per operation. |
 | Query Optimizer | Rule-based optimizer with cost validation for access path and join choice. |
-| Parser | JSqlParser adapter that converts SQL strings into parsed statements. |
+| Parser | JSqlParser adapter that converts SQL strings into parsed statements, Note that this part was fully vibe coded, unfortunatley I did not have enough knowledge nor time to understnad how to implement parsers or use JSQLparser. |
 
 > Page size is deliberately small (256 bytes) so that splits, evictions, and page reads happen frequently and are easy to observe.
 
-## Tech stack
-
-- Java 21
-- Maven
-- JSqlParser
-- JavaFX
 
 ## Data types
 
