@@ -1,4 +1,5 @@
 package ui;
+
 import engine.*;
 import engine.parser.ParsedStatement;
 import engine.parser.QueryParser;
@@ -12,7 +13,10 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.effect.DropShadow;
+import javafx.scene.image.Image;
 import javafx.scene.layout.*;
+import javafx.scene.paint.Color;
 import javafx.scene.text.Font;
 import javafx.stage.Stage;
 
@@ -24,15 +28,15 @@ import java.util.StringJoiner;
  * Single-screen JavaFX workbench for the Visual Database Engine.
  *
  * Layout:
- *   ┌─────────────────────────────────────────────────┐
- *   │  header                                         │
- *   ├───────────────────┬─────────────────────────────┤
- *   │  SQL editor       │  results / explain output   │
- *   ├───────────────────┴─────────────────────────────┤
- *   │  toolbar: [Execute]  [☐ Explain]  status label  │
- *   ├─────────────────────────────────────────────────┤
- *   │  stats bar                                      │
- *   └─────────────────────────────────────────────────┘
+ * ┌─────────────────────────────────────────────────┐
+ * │  header                                         │
+ * ├───────────────────┬─────────────────────────────┤
+ * │  SQL editor       │  results / explain output   │
+ * ├───────────────────┴─────────────────────────────┤
+ * │  toolbar: [Execute]  [☐ Explain]  status label  │
+ * ├─────────────────────────────────────────────────┤
+ * │  stats bar                                      │
+ * └─────────────────────────────────────────────────┘
  *
  * The engine runs on a background thread so the UI stays responsive.
  * Errors from the parser or engine are shown in the output area.
@@ -74,10 +78,18 @@ public class MainUI extends Application {
             return;
         }
 
-        stage.setTitle("Visual Database Engine");
+        stage.setTitle("GlowBox Engine");
+        
+        // Load custom window icon
+        try {
+            stage.getIcons().add(new Image(getClass().getResourceAsStream("/ui/icon.png")));
+        } catch (Exception e) {
+            System.err.println("Note: /icon.png not found in resources.");
+        }
+
         stage.setScene(buildScene());
-        stage.setMinWidth(900);
-        stage.setMinHeight(600);
+        stage.setMinWidth(950);
+        stage.setMinHeight(650);
         stage.setOnCloseRequest(e -> shutdown());
         stage.show();
     }
@@ -100,22 +112,31 @@ public class MainUI extends Application {
         Scene scene = new Scene(root, 1100, 700);
         // Load monospace font for editor and output
         Font.loadFont(MainUI.class.getResourceAsStream(
-            "/fonts/JetBrainsMono-Regular.ttf"), 13);
+            "/fonts/JetBrainsMono-Regular.ttf"), 14);
         return scene;
     }
 
     // ── Header ────────────────────────────────────────────────────────────────
 
     private HBox buildHeader() {
-        Label title = new Label("⬡  Visual Database Engine");
+        Label title = new Label("❖ GlowBox Engine");
         title.setStyle(
-            "-fx-font-family: 'JetBrains Mono', monospace;" +
-            "-fx-font-size: 15px;" +
+            "-fx-font-family: 'JetBrains Mono', 'Segoe UI', sans-serif;" +
+            "-fx-font-size: 18px;" +
             "-fx-font-weight: bold;" +
-            "-fx-text-fill: " + ACCENT + ";" +
-            "-fx-padding: 14 20 14 20;");
+            "-fx-text-fill: " + TEXT_MAIN + ";" +
+            "-fx-padding: 16 24 16 24;"
+        );
+
+        // Add the namesake glow effect
+        DropShadow glow = new DropShadow();
+        glow.setColor(Color.web(ACCENT));
+        glow.setRadius(12);
+        glow.setSpread(0.15);
+        title.setEffect(glow);
 
         HBox header = new HBox(title);
+        header.setAlignment(Pos.CENTER_LEFT);
         header.setStyle(
             "-fx-background-color: " + BG_PANEL + ";" +
             "-fx-border-color: #30363d;" +
@@ -126,15 +147,21 @@ public class MainUI extends Application {
     // ── Work area (editor + output) ───────────────────────────────────────────
 
     private SplitPane buildWorkArea() {
-        // ─── SQL Editor (left) ───────────────────────────────────────────────
-        sqlEditor = new TextArea("-- Write SQL here\n");
-        sqlEditor.setStyle(
+        String commonTextAreaStyle = 
             "-fx-control-inner-background: " + BG_INPUT + ";" +
+            "-fx-background-color: transparent, " + BG_INPUT + ";" +
             "-fx-text-fill: " + TEXT_MAIN + ";" +
             "-fx-font-family: 'JetBrains Mono', monospace;" +
-            "-fx-font-size: 13px;" +
+            "-fx-font-size: 14px;" +
             "-fx-border-color: #30363d;" +
-            "-fx-border-width: 0;");
+            "-fx-border-radius: 6;" +
+            "-fx-background-radius: 6;" +
+            "-fx-focus-color: transparent;" +
+            "-fx-faint-focus-color: transparent;";
+
+        // ─── SQL Editor (left) ───────────────────────────────────────────────
+        sqlEditor = new TextArea("-- Write SQL here--");
+        sqlEditor.setStyle(commonTextAreaStyle);
         sqlEditor.setWrapText(false);
 
         // Run on Ctrl+Enter
@@ -145,51 +172,55 @@ public class MainUI extends Application {
             }
         });
 
-        Label editorLabel = sectionLabel("SQL Editor  (Ctrl+Enter to run)");
-        VBox  leftPane    = new VBox(0, editorLabel, sqlEditor);
+        Label editorLabel = sectionLabel("SQL Editor", "Press Ctrl+Enter to run");
+        VBox  leftPane    = new VBox(8, editorLabel, sqlEditor);
+        leftPane.setPadding(new Insets(12, 6, 12, 12));
         VBox.setVgrow(sqlEditor, Priority.ALWAYS);
 
         // ─── Toolbar ─────────────────────────────────────────────────────────
-        Button  runBtn  = buildButton("▶  Execute", ACCENT);
+        Button  runBtn  = buildButton("▶ Execute", ACCENT, true);
         explainCheck    = new CheckBox("Explain");
-        explainCheck.setStyle("-fx-text-fill: " + TEXT_DIM + "; -fx-font-size: 12px;");
+        explainCheck.setStyle("-fx-text-fill: " + TEXT_MAIN + "; -fx-font-size: 13px; -fx-cursor: hand;");
 
-        Button  clearBtn = buildButton("Clear", "#484f58");
+        Button  clearBtn = buildButton("Clear", "#30363d", false);
         runBtn.setOnAction(e -> runQuery());
         clearBtn.setOnAction(e -> { sqlEditor.clear(); clearOutput(); });
 
         statusLabel = new Label("Ready");
-        statusLabel.setStyle("-fx-text-fill: " + TEXT_DIM + "; -fx-font-size: 12px;");
+        statusLabel.setStyle("-fx-text-fill: " + TEXT_DIM + "; -fx-font-size: 13px;");
 
-        HBox toolbar = new HBox(10, runBtn, explainCheck, clearBtn, statusLabel);
-        toolbar.setPadding(new Insets(8, 12, 8, 12));
+        HBox toolbar = new HBox(15, runBtn, explainCheck, clearBtn);
         toolbar.setAlignment(Pos.CENTER_LEFT);
-        toolbar.setStyle(
+        
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+
+        HBox toolbarContainer = new HBox(10, toolbar, spacer, statusLabel);
+        toolbarContainer.setAlignment(Pos.CENTER);
+        toolbarContainer.setPadding(new Insets(12, 16, 12, 16));
+        toolbarContainer.setStyle(
             "-fx-background-color: " + BG_PANEL + ";" +
             "-fx-border-color: #30363d;" +
-            "-fx-border-width: 1 0 0 0;");
+            "-fx-border-width: 1 0 0 0;" +
+            "-fx-background-radius: 0 0 8 8;"
+        );
 
-        VBox leftWithToolbar = new VBox(0, leftPane, toolbar);
+        VBox leftWithToolbar = new VBox(0, leftPane, toolbarContainer);
         VBox.setVgrow(leftPane, Priority.ALWAYS);
 
         // ─── Output (right) ──────────────────────────────────────────────────
         outputArea = new TextArea();
         outputArea.setEditable(false);
-        outputArea.setStyle(
-            "-fx-control-inner-background: " + BG_INPUT + ";" +
-            "-fx-text-fill: " + TEXT_MAIN + ";" +
-            "-fx-font-family: 'JetBrains Mono', monospace;" +
-            "-fx-font-size: 12px;" +
-            "-fx-border-color: #30363d;" +
-            "-fx-border-width: 0;");
+        outputArea.setStyle(commonTextAreaStyle);
 
-        Label outputLabel = sectionLabel("Output");
-        VBox  rightPane   = new VBox(0, outputLabel, outputArea);
+        Label outputLabel = sectionLabel("Console Output", "Results & Execution Plans");
+        VBox  rightPane   = new VBox(8, outputLabel, outputArea);
+        rightPane.setPadding(new Insets(12, 12, 12, 6));
         VBox.setVgrow(outputArea, Priority.ALWAYS);
 
         SplitPane split = new SplitPane(leftWithToolbar, rightPane);
         split.setDividerPositions(0.45);
-        split.setStyle("-fx-background-color: " + BG_DARK + ";");
+        split.setStyle("-fx-background-color: " + BG_DARK + "; -fx-box-border: transparent;");
         return split;
     }
 
@@ -197,10 +228,11 @@ public class MainUI extends Application {
 
     private HBox buildStatusBar() {
         statsLabel = new Label("No query run yet.");
-        statsLabel.setStyle("-fx-text-fill: " + TEXT_DIM + "; -fx-font-size: 11px;");
+        statsLabel.setStyle("-fx-text-fill: " + TEXT_DIM + "; -fx-font-size: 12px;");
 
         HBox bar = new HBox(statsLabel);
-        bar.setPadding(new Insets(5, 12, 5, 12));
+        bar.setAlignment(Pos.CENTER_RIGHT);
+        bar.setPadding(new Insets(6, 16, 6, 16));
         bar.setStyle(
             "-fx-background-color: " + BG_PANEL + ";" +
             "-fx-border-color: #30363d;" +
@@ -226,6 +258,9 @@ public class MainUI extends Application {
         final String finalSql    = sql;
         final boolean wantExplain = explainCheck.isSelected();
 
+        // Capture the start time
+        final long startTime = System.currentTimeMillis();
+
         Task<StatementExecutor.ExecutionResult> task = new Task<>() {
             @Override
             protected StatementExecutor.ExecutionResult call() throws Exception {
@@ -235,9 +270,12 @@ public class MainUI extends Application {
         };
 
         task.setOnSucceeded(e -> {
+            // Calculate total duration in milliseconds
+            long durationMs = System.currentTimeMillis() - startTime;
+            
             StatementExecutor.ExecutionResult result = task.getValue();
-            showResult(result);
-            setStatus(result.message(), GREEN);
+            showResult(result, durationMs); // Pass the duration to your render method
+            setStatus("Success", GREEN);
         });
 
         task.setOnFailed(e -> {
@@ -254,6 +292,31 @@ public class MainUI extends Application {
     // =========================================================================
     // Output rendering
     // =========================================================================
+    
+ // Notice the new durationMs parameter
+    private void showResult(StatementExecutor.ExecutionResult result, long durationMs) {
+        StringBuilder sb = new StringBuilder();
+
+        if (!result.rows().isEmpty()) {
+            sb.append(formatTable(result.rows())).append("\n");
+            sb.append(result.rows().size()).append(" row(s)\n");
+        } else {
+            sb.append(result.message()).append("\n");
+        }
+
+        if (result.explain() != null) {
+            sb.append("\n").append(result.explain());
+        }
+
+        outputArea.setText(sb.toString());
+
+        // Update stats bar to include the execution time
+        if (!result.rows().isEmpty()) {
+            statsLabel.setText("Rows returned: " + result.rows().size() + "  │  Execution time: " + durationMs + " ms");
+        } else {
+            statsLabel.setText(result.message() + "  │  Execution time: " + durationMs + " ms");
+        }
+    }
 
     private void showResult(StatementExecutor.ExecutionResult result) {
         StringBuilder sb = new StringBuilder();
@@ -279,21 +342,12 @@ public class MainUI extends Application {
         }
     }
 
-    /**
-     * Renders a list of records as a plain-text table.
-     *
-     * Example:
-     *   id  | name   | salary
-     *   ----+--------+-------
-     *   1   | Alice  | 50000
-     */
     private static String formatTable(List<Record> rows) {
         if (rows.isEmpty()) return "(empty)";
 
         var schema = rows.get(0).getSchema();
         int cols   = schema.getColumnCount();
 
-        // Compute column widths
         int[] widths = new int[cols];
         for (int c = 0; c < cols; c++) {
             widths[c] = schema.getColumn(c).getName().length();
@@ -304,13 +358,11 @@ public class MainUI extends Application {
             }
         }
 
-        // Header
         StringBuilder sb = new StringBuilder();
         sb.append(rowLine(schema.getColumns().stream()
             .map(col -> col.getName()).toList(), widths, cols));
         sb.append(separator(widths, cols));
 
-        // Rows
         for (Record r : rows) {
             List<String> values = new java.util.ArrayList<>();
             for (int c = 0; c < cols; c++) values.add(fieldStr(r.getField(c)));
@@ -321,7 +373,7 @@ public class MainUI extends Application {
     }
 
     private static String rowLine(List<String> values, int[] widths, int cols) {
-        StringJoiner sj = new StringJoiner(" | ", "", "\n");
+        StringJoiner sj = new StringJoiner(" │ ", " ", "\n");
         for (int c = 0; c < cols; c++) {
             sj.add(pad(values.get(c), widths[c]));
         }
@@ -329,9 +381,9 @@ public class MainUI extends Application {
     }
 
     private static String separator(int[] widths, int cols) {
-        StringJoiner sj = new StringJoiner("-+-", "", "\n");
+        StringJoiner sj = new StringJoiner("─┼─", "─", "\n");
         for (int c = 0; c < cols; c++) {
-            sj.add("-".repeat(widths[c]));
+            sj.add("─".repeat(widths[c]));
         }
         return sj.toString();
     }
@@ -348,41 +400,46 @@ public class MainUI extends Application {
     // UI helpers
     // =========================================================================
 
-    private Label sectionLabel(String text) {
-        Label l = new Label(text);
-        l.setStyle(
-            "-fx-text-fill: " + TEXT_DIM + ";" +
-            "-fx-font-size: 11px;" +
-            "-fx-padding: 4 8 4 8;" +
-            "-fx-background-color: " + BG_PANEL + ";" +
-            "-fx-border-color: #30363d;" +
-            "-fx-border-width: 0 0 1 0;");
-        l.setMaxWidth(Double.MAX_VALUE);
-        return l;
+    private Label sectionLabel(String primary, String secondary) {
+        Label l = new Label(primary + "  ");
+        l.setStyle("-fx-text-fill: " + TEXT_MAIN + "; -fx-font-size: 14px; -fx-font-weight: bold;");
+        
+        Label sub = new Label(secondary);
+        sub.setStyle("-fx-text-fill: " + TEXT_DIM + "; -fx-font-size: 12px;");
+        
+        HBox box = new HBox(l, sub);
+        box.setAlignment(Pos.BOTTOM_LEFT);
+        
+        // We wrap the HBox in a graphic-only label to maintain your original layout structure seamlessly
+        Label wrapper = new Label();
+        wrapper.setGraphic(box);
+        return wrapper;
     }
 
-    private Button buildButton(String text, String color) {
+    private Button buildButton(String text, String bgColor, boolean isPrimary) {
         Button btn = new Button(text);
+        String textColor = isPrimary ? BG_DARK : TEXT_MAIN;
+        
         btn.setStyle(
-            "-fx-background-color: " + color + ";" +
-            "-fx-text-fill: " + (color.equals(ACCENT) ? "#0d1117" : TEXT_MAIN) + ";" +
-            "-fx-font-size: 12px;" +
+            "-fx-background-color: " + bgColor + ";" +
+            "-fx-text-fill: " + textColor + ";" +
+            "-fx-font-size: 13px;" +
             "-fx-font-weight: bold;" +
-            "-fx-padding: 5 14 5 14;" +
+            "-fx-padding: 6 16 6 16;" +
             "-fx-cursor: hand;" +
-            "-fx-background-radius: 4;");
+            "-fx-background-radius: 6;");
+            
         btn.setOnMouseEntered(e ->
-            btn.setStyle(btn.getStyle().replace(color, shiftColor(color))));
+            btn.setStyle(btn.getStyle().replace(bgColor, shiftColor(bgColor))));
         btn.setOnMouseExited(e ->
-            btn.setStyle(btn.getStyle().replace(shiftColor(color), color)));
+            btn.setStyle(btn.getStyle().replace(shiftColor(bgColor), bgColor)));
         return btn;
     }
 
-    /** Naive brightness shift for hover — darkens the colour slightly. */
     private static String shiftColor(String hex) {
         return switch (hex) {
             case "#58a6ff" -> "#79b8ff";
-            case "#484f58" -> "#5a6270";
+            case "#30363d" -> "#484f58";
             default        -> hex;
         };
     }
@@ -391,7 +448,7 @@ public class MainUI extends Application {
         Platform.runLater(() -> {
             statusLabel.setText(text);
             statusLabel.setStyle(
-                "-fx-text-fill: " + color + "; -fx-font-size: 12px;");
+                "-fx-text-fill: " + color + "; -fx-font-size: 13px; -fx-font-weight: bold;");
         });
     }
 
