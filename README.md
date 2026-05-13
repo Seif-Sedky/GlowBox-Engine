@@ -464,6 +464,100 @@ Each entry:
 | Disk-spilling joins | All join data must fit in memory from at least one relation. |
 | Catalog persistence | Schema is in-memory only; must be re-seeded on startup. |
 | Statistics persistence | Histograms are rebuilt from inserts at runtime. |
+## Architecture
+
+GlowBox Engine follows a layered database-engine architecture where each subsystem has a clearly separated responsibility. Queries flow from the SQL parser down to execution operators, which interact with the storage layer through the buffer pool and disk manager.
+
+```text
+                +----------------------+
+                |      JavaFX UI       |
+                +----------+-----------+
+                           |
+                           v
+                +----------------------+
+                |     SQL Parser       |
+                |    (JSqlParser)      |
+                +----------+-----------+
+                           |
+                           v
+                +----------------------+
+                |   Statement Executor |
+                +----------+-----------+
+                           |
+                           v
+                +----------------------+
+                |   Query Optimizer    |
+                +----------+-----------+
+                           |
+                           v
+                +----------------------+
+                |   Operator Tree      |
+                | (Scan / Join / etc.) |
+                +----------+-----------+
+                           |
+                +----------+-----------+
+                |                      |
+                v                      v
+     +------------------+   +------------------+
+     |   Heap Files     |   |  Linear Hash     |
+     |   (Table Data)   |   |     Indexes      |
+     +---------+--------+   +---------+--------+
+               |                      |
+               +----------+-----------+
+                          |
+                          v
+               +----------------------+
+               |   Buffer Pool (LRU)  |
+               +----------+-----------+
+                          |
+                          v
+               +----------------------+
+               |   Disk/File Manager  |
+               +----------------------+
+```
+
+### Query lifecycle
+
+1. The user submits a SQL statement through the JavaFX UI.
+2. JSqlParser converts the SQL string into a parsed statement tree.
+3. The `StatementExecutor` validates schema metadata using the catalog.
+4. The optimizer selects:
+   - access path (`SeqScan`, `SelectLinear`, or `SelectIndex`)
+   - join algorithm (`BNL` or `Merge Join`)
+   - distinct strategy (`Hash` or `Sort`)
+5. An operator tree is constructed.
+6. Operators request records from heap files and indexes.
+7. Pages are fetched through the buffer pool, except the index which directly consults the disk manager.
+8. The disk manager performs raw page reads/writes against `.db` files.
+9. Results are materialized and returned to the UI.
+
+### Storage model
+
+- Every table is stored as a heap file on disk.
+- Pages are fixed at 256 bytes.
+- Records are fixed-length and serialized directly into page slots.
+- Each record is identified using:
+  - page number
+  - slot number
+- Indexes store Record IDs (RIDs) pointing back to heap records.
+
+### Buffer pool design
+
+The engine uses an LRU (Least Recently Used) buffer pool with 16 frames.
+
+Responsibilities include:
+
+- caching hot pages in memory
+- minimizing repeated disk I/O
+- tracking dirty pages
+- evicting least recently used pages when full
+
+
+### Optimizer philosophy
+
+The optimizer is intentionally lightweight and educational rather than fully cost-accurate. It demonstrates how real systems make execution decisions based on estimated I/O and relation sizes.
+
+The engine exposes optimizer reasoning through `EXPLAIN`, making execution plans easy to inspect for learning and debugging purposes.
 
 ## Small future improvements
 
