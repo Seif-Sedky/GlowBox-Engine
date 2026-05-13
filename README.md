@@ -8,6 +8,7 @@ Visualizer is still underway.
 
 GlowBox Engine is a single-user, educational, disk-based storage engine built from scratch in Java. It includes a real storage layer, buffer pool, linear hash index, cost-based query optimizer, and a SQL parser backed by JSqlParser. Every query runs against actual binary `.db` files on disk.
 
+I desinged this prioritizing heavy decoupling to be able to add features easily following the classic SOLID principles
 ### Engine layers
 
 | Layer | Responsibility |
