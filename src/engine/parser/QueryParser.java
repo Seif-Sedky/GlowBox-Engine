@@ -76,7 +76,7 @@ public class QueryParser {
 
     private static ParsedStatement translateSelect(Select select) {
         // JSqlParser 4.6+: SelectBody was removed. PlainSelect and SetOperationList
-        // both implement Select directly — check the Select object itself.
+        // both implement Select directly — no getSelectBody() call needed.
         if (select instanceof SetOperationList sol) return translateSetOperation(sol);
         return translatePlainSelect((PlainSelect) select);
     }
@@ -86,7 +86,7 @@ public class QueryParser {
      * Chained set operations (A UNION B UNION C) are not supported.
      */
     private static ParsedStatement translateSetOperation(SetOperationList sol) {
-        List<Select>       selects = sol.getSelects();   // JSqlParser 4.6+: List<Select> not List<SelectBody>
+        List<Select>       selects = sol.getSelects();   // JSqlParser 4.6+: List<Select>, not List<SelectBody>
         List<SetOperation> ops     = sol.getOperations();
 
         if (selects.size() != 2 || ops.size() != 1)
@@ -193,12 +193,21 @@ public class QueryParser {
     // -------------------------------------------------------------------------
 
     private static ParsedStatement translateInsert(Insert insert) {
-        String tableName = insert.getTable().getName();
-        // JSqlParser 4.6+: insert.getValues() was removed.
-        // INSERT values now live in insert.getSelect() as a PlainSelect with no FROM.
-        var exprs = ((PlainSelect) insert.getSelect()).getValues().getExpressions();
+        String       tableName = insert.getTable().getName();
         List<String> rawValues = new ArrayList<>();
-        for (var e : exprs) rawValues.add(extractRawValue(e));
+
+        // JSqlParser 4.9: insert.getSelect() returns a Values object (not PlainSelect)
+        // for INSERT INTO t VALUES (...). Values implements Select directly.
+        Select insertSelect = insert.getSelect();
+        if (insertSelect instanceof Values values) {
+            for (var e : values.getExpressions()) rawValues.add(extractRawValue(e));
+        } else if (insertSelect instanceof PlainSelect ps) {
+            for (var e : ps.getValues().getExpressions()) rawValues.add(extractRawValue(e));
+        } else {
+            throw new ParseException(
+                "Unsupported INSERT format: " + insertSelect.getClass().getSimpleName());
+        }
+
         return new ParsedStatement.InsertStatement(tableName, rawValues);
     }
 
@@ -211,7 +220,7 @@ public class QueryParser {
         Map<String, String> assignments = new LinkedHashMap<>();
         for (UpdateSet us : update.getUpdateSets()) {
             List<Column> cols = us.getColumns();
-            var          vals = us.getValues();
+            var          vals = us.getValues();   // ExpressionList<?> — var avoids wildcard mismatch
             for (int i = 0; i < cols.size(); i++)
                 assignments.put(cols.get(i).getColumnName(), extractRawValue(vals.get(i)));
         }
