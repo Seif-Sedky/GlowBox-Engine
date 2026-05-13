@@ -472,7 +472,3 @@ To make the engine more usable for smaller real-world demos, these would help mo
 - Query parsing enhancements so multiple statements can be entered and executed in one batch.
 - Insert one statement at a time from the UI instead of forcing a single-query workflow.
 - Catalog persistence so schemas survive restarts without needing to be re-created.
-
----
-
-If you want, this README can be reshaped into a shorter project-focused version or a more polished GitHub README with badges and a setup section.
