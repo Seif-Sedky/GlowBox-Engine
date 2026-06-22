@@ -2,7 +2,7 @@
 
 The Query Way To Your Data
 
-Visualizer is still underway.
+Visualizer Repo Link (deployed on Github Pages): https://github.com/Seif-Sedky/GlowBox-Engine-Visualizer.
 
 ## Overview
 
